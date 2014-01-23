@@ -153,7 +153,6 @@ class MathHelper {
 					Point2f q1 = q0 + perp(r2);
 
 					Vector2f intersect;
-
 					if (lineIntersect(p0, p1, q0, q1, intersect)) {
 						cx += intersect.x;
 						cy += intersect.y;
@@ -247,11 +246,11 @@ class ImageConverter {
 		ImageConverter() :
 				it_(nh_) {
 			image_sub_ = it_.subscribe("input", 1, &ImageConverter::imageCb, this);
-			cv::namedWindow(OPENCV_WINDOW);
+			thresh = 30;
 
-			alpha = 255;
+			namedWindow("Canny");
 
-			//createTrackbar("alpha", OPENCV_WINDOW, &alpha, 255);
+			createTrackbar("Threshold", "Canny", &thresh, 255);
 
 			lastAvg = 100;
 			frameCount = 0;
@@ -265,7 +264,6 @@ class ImageConverter {
 		}
 
 		~ImageConverter() {
-			cv::destroyWindow(OPENCV_WINDOW);
 		}
 
 		void createPoints(vector<Point2f> &points, unsigned int countX, unsigned int countY, unsigned int width, unsigned int height) {
@@ -293,21 +291,33 @@ class ImageConverter {
 			}
 
 			Mat image = cv_ptr->image;
+			Mat canny;
 			Mat temp;
 			Mat temp2;
+
+			bilateralFilter(image, temp, 5, 100, 100);
+			cvtColor(temp, temp, CV_BGR2GRAY);
+
+			//Laplacian(image, image, CV_8U, 3);
+
+			//dilate(image, image, 5, Point(-1, -1), 4);
+
+			//imshow("Laplacian", image);
+
+			Canny(temp, canny, thresh, 2 * thresh);
+
+			imshow("Canny", canny);
 
 			//vector<Point2d> corners;
 			vector<Point2f> nextPoints;
 			vector<uchar> status;
 			vector<float> err;
 
-			bilateralFilter(image, temp, 5, 100, 100);
-
-			cvtColor(temp, temp, CV_BGR2GRAY);
+			//cvtColor(temp, temp, CV_BGR2GRAY);
 
 			for (int i = 0; i < temp.cols; i++) {
 				for (int j = 0; j < temp.rows; j++) {
-					temp.at<uchar>(j, i) = saturate_cast<uchar>((alpha / 255.0) * (temp.at<uchar>(j, i)));
+					temp.at<uchar>(j, i) = saturate_cast<uchar>((1) * (temp.at<uchar>(j, i)));
 				}
 			}
 
@@ -317,7 +327,7 @@ class ImageConverter {
 
 			 cvtColor(image, image, CV_GRAY2BGR);*/
 
-			resize(image, image, Size(image.cols * 2, image.rows * 2));
+			//resize(image, image, Size(image.cols * 2, image.rows * 2));
 
 			prev.copyTo(temp2);
 			temp.copyTo(prev);
@@ -344,8 +354,8 @@ class ImageConverter {
 				vector<vector<Point2f> > pointPairs;
 				vector<VelocityPoint> vPoints;
 
-				/*for (vector<Point2f>::iterator it = points.begin(); it != points.end(); ++it) {
-					circle(image, *it * 2, 1, Scalar(255, 0, 0), -1);
+				for (vector<Point2f>::iterator it = points.begin(); it != points.end(); ++it) {
+					circle(image, *it, 1, Scalar(255, 0, 0), -1);
 				}
 
 				vector<Point2f>::iterator it = nextPoints.begin();
@@ -365,9 +375,9 @@ class ImageConverter {
 
 					error += err[validPoints];
 
-					circle(image, *it * 2, 1, Scalar(0, 0, 255), -1);
+					circle(image, *it, 1, Scalar(0, 0, 255), -1);
 
-					line(image, *it * 2, p * 2, Scalar(0, 0, 255), 1);
+					line(image, *it, p, Scalar(0, 0, 255), 1);
 
 					++it;
 					validPoints++;
@@ -375,18 +385,30 @@ class ImageConverter {
 
 				cout << "\033[32mDone. " << points.size() << " points tested, \033[1m" << validPoints << " valid, \033[31m"
 						<< missedPoints << " not found. " << (lastAvg = error / validPoints) << " avg error." << "\033[0m"
-						<< endl;*/
+						<< endl;
 
-				makeVectors(points, nextPoints, status, vPoints, pointPairs);
+				//makeVectors(points, nextPoints, status, vPoints, pointPairs);
 
-				Point2f centre = Point2f(temp.cols / 2, temp.rows / 2);
-				Point2f horizon = MathHelper::converge(pointPairs);
+				//Point2f centre = Point2f(temp.cols / 2, temp.rows / 2);
+				//Point2f horizon = MathHelper::converge(pointPairs);
 
-				Vector2f move = horizon - centre;
+				//Vector2f move = horizon - centre;
 
-				circle(image, (centre - MathHelper::norm(move) * log(MathHelper::size(move)) * 10) * 2, 10, Scalar(0, 255, 0), -1);
+				//circle(image, (centre - MathHelper::norm(move) * log(MathHelper::size(move)) * 10) * 2, 10, Scalar(0, 255, 0), -1);
 
-				circle(image, centre * 2, 3, Scalar(0, 255, 0), -1);
+				//circle(image, centre * 2, 3, Scalar(0, 255, 0), -1);
+
+				vector<vector<Point> > contours;
+				vector<Vec4i> hierarchy;
+
+				findContours(canny, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
+
+				for(int i = 0; i < contours.size(); i++){
+					vector<Point> ci = contours[i];
+					Vec4i hi = hierarchy[i];
+
+					drawContours(image, contours, i, Scalar(0, 255, 255), 1);
+				}
 
 			}
 
@@ -407,7 +429,7 @@ class ImageConverter {
 		float angles[3];
 		int anglePos;
 
-		int alpha;
+		int thresh;
 };
 
 int main(int argc, char **argv) {
